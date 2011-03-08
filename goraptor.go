@@ -1,3 +1,37 @@
+/*
+Go bindings for the raptor RDF parser / seraliser.
+
+Written in 2011 by William Waites <ww@styx.org>.
+Distributed under the terms of the LGPL version 2.1 or
+any later version.
+
+To build you must have raptor version 2 or greater 
+installed. You can get raptor from http://librdf.org/raptor/
+
+Example usage:
+
+	parser := goraptor.NewParser("guess")
+	defer parser.Free()
+
+	ch := parser.ParseUri("www.w3.org/People/Berners-Lee/card", "")
+        for {
+                statement := <-ch
+                if closed(ch) {
+                        break
+                }
+		// do something with statement
+        }
+
+The basic datatype is the Term which represents an RDF URI,
+blank node or literal value. Terms are grouped into compound
+Statement datatypes which contain four Terms, Subject, Predicate,
+Object and Graph. Both of these datatypes are memory managed
+by Go but can be converted back and forth to/from raptor's
+internal representation. The datatypes support a compact
+binary encoding for use with the gob package.
+
+There is no support for the serialiser yet.
+*/
 package goraptor
 
 // #cgo CFLAGS: -I/usr/local/include
@@ -634,6 +668,7 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 	return p.out
 }
 
+//for internal use only. callback from the C statement handler for the parser
 //export GoRaptor_handle_statement
 func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer) {
 	parser := (*Parser)(user_data)
