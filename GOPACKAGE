@@ -1,0 +1,6 @@
+{
+	"name": "goraptor",
+	"description": "Go bindings for the raptor RDF parser / serialiser library",
+	"author": "William Waites",
+	"email": "ww@styx.org"
+}
