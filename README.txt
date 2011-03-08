@@ -49,6 +49,7 @@ const (
 FUNCTIONS
 
 func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer)
+for internal use only. callback from the C statement handler for the parser
 export GoRaptor_handle_statement
 
 func Reset()

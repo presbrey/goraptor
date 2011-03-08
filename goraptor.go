@@ -44,11 +44,12 @@ package goraptor
 import "C"
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"os"
-	"unsafe"
 	"sync"
+	"unsafe"
 )
 
 const (
@@ -136,10 +137,8 @@ func TermDecode(buf []byte) (t Term, err os.Error) {
 type Uri string
 
 func uri_from_term(term *C.raptor_term) Term {
-	world_lock.Lock()
 	ruri := *(**C.raptor_uri)(unsafe.Pointer(&term.value))
 	uristr := C.GoString((*C.char)(unsafe.Pointer(C.raptor_uri_as_string(ruri))))
-	world_lock.Unlock()
 	uri := Uri(uristr)
 	return &uri
 
@@ -179,10 +178,10 @@ func (u *Uri) Equals(other Term) (eq bool) {
 }
 func (u *Uri) GobEncode() (buf []byte, err os.Error) {
 	ustr := string(*u)
-	ulen := len(ustr)
-	buf = make([]byte, 1+ulen)
-	buf[0] = RAPTOR_TERM_TYPE_URI
-	C.memcpy(unsafe.Pointer(&buf[1]), unsafe.Pointer(&[]byte(ustr)[0]), C.size_t(ulen))
+	w := bytes.NewBuffer(make([]byte, 0, len(ustr)+1))
+	w.WriteByte(RAPTOR_TERM_TYPE_URI)
+	w.WriteString(ustr)
+	buf = w.Bytes()
 	return
 }
 func (u *Uri) GobDecode(buf []byte) (err os.Error) {
@@ -204,10 +203,8 @@ func (u *Uri) GobDecode(buf []byte) (err os.Error) {
 type Blank string
 
 func blank_from_term(term *C.raptor_term) Term {
-	world_lock.Lock()
 	rblank := (*C.raptor_term_blank_value)(unsafe.Pointer(&term.value))
 	blankstr := C.GoString((*C.char)(unsafe.Pointer(rblank.string)))
-	world_lock.Unlock()
 	blank := Blank(blankstr)
 	return &blank
 
@@ -247,10 +244,10 @@ func (b *Blank) Equals(other Term) (eq bool) {
 }
 func (b *Blank) GobEncode() (buf []byte, err os.Error) {
 	bstr := string(*b)
-	blen := len(bstr)
-	buf = make([]byte, 1+blen)
-	buf[0] = RAPTOR_TERM_TYPE_BLANK
-	C.memcpy(unsafe.Pointer(&buf[1]), unsafe.Pointer(&[]byte(bstr)[0]), C.size_t(blen))
+	w := bytes.NewBuffer(make([]byte, 0, len(bstr)+1))
+	w.WriteByte(RAPTOR_TERM_TYPE_BLANK)
+	w.WriteString(bstr)
+	buf = w.Bytes()
 	return
 }
 func (b *Blank) GobDecode(buf []byte) (err os.Error) {
@@ -276,7 +273,6 @@ type Literal struct {
 }
 
 func literal_from_term(term *C.raptor_term) Term {
-	world_lock.Lock()
 	literal := Literal{}
 	lval := (*C.raptor_term_literal_value)(unsafe.Pointer(&term.value))
 	literal.value = C.GoString((*C.char)(unsafe.Pointer(lval.string)))
@@ -287,7 +283,6 @@ func literal_from_term(term *C.raptor_term) Term {
 		dtstr := C.raptor_uri_as_string(lval.datatype)
 		literal.datatype = C.GoString((*C.char)(unsafe.Pointer(dtstr)))
 	}
-	world_lock.Unlock()
 	return &literal
 }
 
@@ -349,7 +344,7 @@ const (
 )
 
 func (l *Literal) GobEncode() (buf []byte, err os.Error) {
-	var flags uint8
+	var flags byte
 	size := 2
 	vlen := len(l.value)
 	size += 2 + vlen
@@ -363,25 +358,23 @@ func (l *Literal) GobEncode() (buf []byte, err os.Error) {
 		flags |= has_datatype
 		size += 2 + dtlen
 	}
-	buf = make([]byte, size)
-	buf[0] = RAPTOR_TERM_TYPE_LITERAL
-	buf[1] = flags
-	offset := 2
-	binary.LittleEndian.PutUint16(buf[offset:offset+2], uint16(vlen))
-	offset += 2
-	C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&[]byte(l.value)[0]), C.size_t(vlen))
-	offset += vlen
+	w := bytes.NewBuffer(make([]byte, 0, size))
+	w.WriteByte(RAPTOR_TERM_TYPE_LITERAL)
+	w.WriteByte(flags)
+	sbuf := make([]byte, 2)
+	binary.LittleEndian.PutUint16(sbuf, uint16(vlen))
+	w.Write(sbuf)
+	w.WriteString(l.value)
 	if langlen != 0 {
-		buf[offset] = uint8(langlen)
-		offset++
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&[]byte(l.lang)[0]), C.size_t(langlen))
-		offset += langlen
+		w.WriteByte(byte(langlen))
+		w.WriteString(l.lang)
 	}
 	if dtlen != 0 {
-		binary.LittleEndian.PutUint16(buf[offset:offset+2], uint16(dtlen))
-		offset += 2
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&[]byte(l.datatype)[0]), C.size_t(dtlen))
+		binary.LittleEndian.PutUint16(sbuf, uint16(dtlen))
+		w.Write(sbuf)
+		w.WriteString(l.datatype)
 	}
+	buf = w.Bytes()
 	return
 }
 func (l *Literal) GobDecode(buf []byte) (err os.Error) {
@@ -517,27 +510,31 @@ func (s *Statement) GobEncode() (buf []byte, err os.Error) {
 		glen = len(gbuf)
 	}
 
-	buf = make([]byte, 8+slen+plen+olen+glen)
-	binary.LittleEndian.PutUint16(buf[0:2], uint16(slen))
-	binary.LittleEndian.PutUint16(buf[2:4], uint16(plen))
-	binary.LittleEndian.PutUint16(buf[4:6], uint16(olen))
-	binary.LittleEndian.PutUint16(buf[6:8], uint16(glen))
-	offset := 8
+	w := bytes.NewBuffer(make([]byte, 0, 8+slen+plen+olen+glen))
+
+	sizebuf := make([]byte, 2)
+	binary.LittleEndian.PutUint16(sizebuf, uint16(slen))
+	w.Write(sizebuf)
+	binary.LittleEndian.PutUint16(sizebuf, uint16(plen))
+	w.Write(sizebuf)
+	binary.LittleEndian.PutUint16(sizebuf, uint16(olen))
+	w.Write(sizebuf)
+	binary.LittleEndian.PutUint16(sizebuf, uint16(glen))
+	w.Write(sizebuf)
+
 	if slen != 0 {
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&sbuf[0]), C.size_t(slen))
-		offset += slen
+		w.Write(sbuf)
 	}
 	if plen != 0 {
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&pbuf[0]), C.size_t(plen))
-		offset += plen
+		w.Write(pbuf)
 	}
 	if olen != 0 {
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&obuf[0]), C.size_t(olen))
-		offset += olen
+		w.Write(obuf)
 	}
 	if glen != 0 {
-		C.memcpy(unsafe.Pointer(&buf[offset]), unsafe.Pointer(&gbuf[0]), C.size_t(glen))
+		w.Write(gbuf)
 	}
+	buf = w.Bytes()
 	return
 }
 func (s *Statement) GobDecode(buf []byte) (err os.Error) {
