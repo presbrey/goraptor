@@ -37,6 +37,7 @@ package goraptor
 // #cgo CFLAGS: -I/usr/local/include
 // #cgo LDFLAGS: -L/usr/local/lib -lraptor2
 // #include <stdlib.h>
+// #include <string.h>
 // #include <strings.h>
 // #include <raptor2/raptor.h>
 // #include "craptor.h"
