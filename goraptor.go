@@ -362,7 +362,7 @@ func (l *Literal) GobEncode() (buf []byte, err os.Error) {
 	w.WriteByte(RAPTOR_TERM_TYPE_LITERAL)
 	w.WriteByte(flags)
 	sbuf := make([]byte, 2)
-	binary.LittleEndian.PutUint16(sbuf, uint16(vlen))
+	binary.BigEndian.PutUint16(sbuf, uint16(vlen))
 	w.Write(sbuf)
 	w.WriteString(l.value)
 	if langlen != 0 {
@@ -370,7 +370,7 @@ func (l *Literal) GobEncode() (buf []byte, err os.Error) {
 		w.WriteString(l.lang)
 	}
 	if dtlen != 0 {
-		binary.LittleEndian.PutUint16(sbuf, uint16(dtlen))
+		binary.BigEndian.PutUint16(sbuf, uint16(dtlen))
 		w.Write(sbuf)
 		w.WriteString(l.datatype)
 	}
@@ -392,7 +392,7 @@ func (l *Literal) GobDecode(buf []byte) (err os.Error) {
 	*l = Literal{}
 	flags := buf[1]
 	offset := 2
-	llen := int(binary.LittleEndian.Uint16(buf[offset : offset+2]))
+	llen := int(binary.BigEndian.Uint16(buf[offset : offset+2]))
 	offset += 2
 	l.value = string(buf[offset : offset+llen])
 	offset += int(llen)
@@ -405,7 +405,7 @@ func (l *Literal) GobDecode(buf []byte) (err os.Error) {
 	}
 
 	if flags&has_datatype != 0 {
-		dtlen := int(binary.LittleEndian.Uint16(buf[offset : offset+2]))
+		dtlen := int(binary.BigEndian.Uint16(buf[offset : offset+2]))
 		offset += 2
 		l.datatype = string(buf[offset : offset+dtlen])
 	}
@@ -510,33 +510,21 @@ func (s *Statement) GobEncode() (buf []byte, err os.Error) {
 		glen = len(gbuf)
 	}
 
-	w := bytes.NewBuffer(make([]byte, 0, 8+slen+plen+olen+glen))
+	buf = make([]byte, 8, 8+len(sbuf)+len(pbuf)+len(obuf)+len(gbuf))
 
-	sizebuf := make([]byte, 2)
-	binary.LittleEndian.PutUint16(sizebuf, uint16(slen))
-	w.Write(sizebuf)
-	binary.LittleEndian.PutUint16(sizebuf, uint16(plen))
-	w.Write(sizebuf)
-	binary.LittleEndian.PutUint16(sizebuf, uint16(olen))
-	w.Write(sizebuf)
-	binary.LittleEndian.PutUint16(sizebuf, uint16(glen))
-	w.Write(sizebuf)
+	binary.BigEndian.PutUint16(buf[0:2], uint16(slen))
+	binary.BigEndian.PutUint16(buf[2:4], uint16(plen))
+	binary.BigEndian.PutUint16(buf[4:6], uint16(olen))
+	binary.BigEndian.PutUint16(buf[6:8], uint16(glen))
 
-	if slen != 0 {
-		w.Write(sbuf)
-	}
-	if plen != 0 {
-		w.Write(pbuf)
-	}
-	if olen != 0 {
-		w.Write(obuf)
-	}
-	if glen != 0 {
-		w.Write(gbuf)
-	}
-	buf = w.Bytes()
+	buf = append(buf, sbuf...)
+	buf = append(buf, pbuf...)
+	buf = append(buf, obuf...)
+	buf = append(buf, gbuf...)
+
 	return
 }
+
 func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -544,11 +532,13 @@ func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 		}
 	}()
 	*s = Statement{}
-	slen := int(binary.LittleEndian.Uint16(buf[0:2]))
-	plen := int(binary.LittleEndian.Uint16(buf[2:4]))
-	olen := int(binary.LittleEndian.Uint16(buf[4:6]))
-	glen := int(binary.LittleEndian.Uint16(buf[6:8]))
+
+	slen := int(binary.BigEndian.Uint16(buf[0:2]))
+	plen := int(binary.BigEndian.Uint16(buf[2:4]))
+	olen := int(binary.BigEndian.Uint16(buf[4:6]))
+	glen := int(binary.BigEndian.Uint16(buf[6:8]))
 	offset := 8
+
 	if slen != 0 {
 		s.Subject, err = TermDecode(buf[offset : offset+slen])
 		if err != nil {
@@ -556,6 +546,7 @@ func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 		}
 		offset += slen
 	}
+
 	if plen != 0 {
 		s.Predicate, err = TermDecode(buf[offset : offset+plen])
 		if err != nil {
@@ -563,6 +554,7 @@ func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 		}
 		offset += plen
 	}
+
 	if olen != 0 {
 		s.Object, err = TermDecode(buf[offset : offset+olen])
 		if err != nil {
@@ -570,6 +562,7 @@ func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 		}
 		offset += olen
 	}
+
 	if glen != 0 {
 		s.Graph, err = TermDecode(buf[offset : offset+glen])
 		if err != nil {
@@ -669,6 +662,8 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 //for internal use only. callback from the C statement handler for the parser
 //export GoRaptor_handle_statement
 func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer) {
+	// must be called with parser.lock held
+	defer func() {} ()
 	parser := (*Parser)(user_data)
 	rs := (*C.raptor_statement)(rsp)
 	s := Statement{}
