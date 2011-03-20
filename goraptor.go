@@ -72,8 +72,27 @@ const (
 var world_lock sync.Mutex
 var global_world *C.raptor_world
 
+// struct holding some details of available parsers or serializers
+type Syntax struct {
+	Label string
+	Name string
+	MimeType string
+}
+
+func (s *Syntax) String() string {
+	str := fmt.Sprintf("%s - %s", s.Name, s.Label)
+	if len(s.MimeType) > 0 {
+		str += fmt.Sprintf(" (%s)", s.MimeType)
+	}
+	return str
+}
+
+// global map of parser name to parser description
+var ParserSyntax map[string]*Syntax
+// global map of serializer name to serializer description
+var SerializerSyntax map[string]*Syntax
+
 func init() {
-	Reset()
 	LogLevels = make(map[int]string)
 	LogLevels[RAPTOR_LOG_LEVEL_NONE] = "NONE"
 	LogLevels[RAPTOR_LOG_LEVEL_TRACE] = "TRACE"
@@ -82,6 +101,37 @@ func init() {
 	LogLevels[RAPTOR_LOG_LEVEL_WARN] = "WARN"
 	LogLevels[RAPTOR_LOG_LEVEL_ERROR] = "ERROR"
 	LogLevels[RAPTOR_LOG_LEVEL_FATAL] = "FATAL"
+	Reset()
+
+	ParserSyntax = make(map[string]*Syntax)
+	for i := 0;; i++ {
+		syndesc := C.raptor_world_get_parser_description(global_world, C.uint(i))
+		if syndesc == nil {
+			break
+		}
+		syntax := &Syntax{}
+		syntax.Label = C.GoString(syndesc.label)
+		syntax.Name = C.GoString(*syndesc.names)
+		if syndesc.mime_types != nil {
+			syntax.MimeType = C.GoString((*syndesc.mime_types).mime_type)
+		}
+		ParserSyntax[syntax.Name] = syntax
+	}
+
+	SerializerSyntax = make(map[string]*Syntax)
+	for i := 0;; i++ {
+		syndesc := C.raptor_world_get_serializer_description(global_world, C.uint(i))
+		if syndesc == nil {
+			break
+		}
+		syntax := &Syntax{}
+		syntax.Label = C.GoString(syndesc.label)
+		syntax.Name = C.GoString(*syndesc.names)
+		if syndesc.mime_types != nil {
+			syntax.MimeType = C.GoString((*syndesc.mime_types).mime_type)
+		}
+		SerializerSyntax[syntax.Name] = syntax
+	}
 }
 
 func Reset() {
@@ -644,15 +694,23 @@ func (p *Parser) Free() {
 	p.mutex.Unlock()
 }
 
+// set the log handler which by default will use the generic log package
 func (p *Parser) SetLogHandler(handler LogHandler) {
 	C.go_raptor_set_log_handler(p.world, unsafe.Pointer(&handler))
 }
 
-type NamespaceHandler func(string, string)
+/*
+A handler function to be called when the parser encounters
+a namespace.
+*/
+type NamespaceHandler func(prefix string, uri string)
+
+// set the namespace handler which is by default a noop
 func (p *Parser) SetNamespaceHandler(handler NamespaceHandler) {
 	p.namespace_handler = handler
 }
 
+// parse a local file
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
 	p.out = make(chan *Statement)
 	go func() {
@@ -686,6 +744,7 @@ func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
 	return p.out
 }
 
+// parse a network resource
 func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 	p.out = make(chan *Statement)
 	go func() {
@@ -776,6 +835,7 @@ func (s *Serializer) end() {
 	s.running = false
 }
 
+// set the log handler which by default will use the generic log package
 func (s *Serializer) SetLogHandler(handler LogHandler) {
 	s.mutex.Lock()
 	C.go_raptor_set_log_handler(s.world, unsafe.Pointer(&handler))

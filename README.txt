@@ -61,6 +61,12 @@ VARIABLES
 var LogLevels map[int]string
 For convenience a mapping of log levels to human readable strings.
 
+var ParserSyntax map[string]*Syntax
+global map of parser name to parser description
+
+var SerializerSyntax map[string]*Syntax
+global map of serializer name to serializer description
+
 
 FUNCTIONS
 
@@ -118,7 +124,9 @@ are colled with a log level integer and a log message string. The
 default implementation pretty prints the level and the string using
 the generic log package
 
-type NamespaceHandler func(string, string)
+type NamespaceHandler func(prefix string, uri string)
+A handler function to be called when the parser encounters
+a namespace.
 
 type Parser struct {
     // contains unexported fields
@@ -129,12 +137,16 @@ func NewParser(name string) *Parser
 func (p *Parser) Free()
 
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement
+parse a local file
 
 func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement
+parse a network resource
 
 func (p *Parser) SetLogHandler(handler LogHandler)
+set the log handler which by default will use the generic log package
 
 func (p *Parser) SetNamespaceHandler(handler NamespaceHandler)
+set the namespace handler which is by default a noop
 
 type Serializer struct {
     // contains unexported fields
@@ -153,6 +165,7 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error)
 
 func (s *Serializer) SetLogHandler(handler LogHandler)
+set the log handler which by default will use the generic log package
 
 func (s *Serializer) SetNamespace(prefix, uri string)
 
@@ -169,6 +182,15 @@ func (s *Statement) GobEncode() (buf []byte, err os.Error)
 func (s *Statement) N3() string
 
 func (s *Statement) String() string
+
+type Syntax struct {
+    Label    string
+    Name     string
+    MimeType string
+}
+struct holding some details of available parsers or serializers
+
+func (s *Syntax) String() string
 
 type Term interface {
     Type() uint8
