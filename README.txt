@@ -45,10 +45,35 @@ const (
     RAPTOR_TERM_TYPE_LITERAL = C.RAPTOR_TERM_TYPE_LITERAL
 )
 
+const (
+    RAPTOR_LOG_LEVEL_NONE  = C.RAPTOR_LOG_LEVEL_NONE
+    RAPTOR_LOG_LEVEL_TRACE = C.RAPTOR_LOG_LEVEL_TRACE
+    RAPTOR_LOG_LEVEL_DEBUG = C.RAPTOR_LOG_LEVEL_DEBUG
+    RAPTOR_LOG_LEVEL_INFO  = C.RAPTOR_LOG_LEVEL_INFO
+    RAPTOR_LOG_LEVEL_WARN  = C.RAPTOR_LOG_LEVEL_WARN
+    RAPTOR_LOG_LEVEL_ERROR = C.RAPTOR_LOG_LEVEL_ERROR
+    RAPTOR_LOG_LEVEL_FATAL = C.RAPTOR_LOG_LEVEL_FATAL
+)
+
+
+VARIABLES
+
+var LogLevels map[int]string
+For convenience a mapping of log levels to human readable strings.
+
 
 FUNCTIONS
 
-func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer)
+func GoRaptor_handle_log(user_data, msgp unsafe.Pointer)
+For internal use only, callback for log messages from C. Arranges
+that the configured log handler will be called.
+export GoRaptor_handle_log
+
+func GoRaptor_handle_namespace(user_data, nsp unsafe.Pointer)
+for internal use only. callback from the C namespace handler for the parser
+export GoRaptor_handle_namespace
+
+func GoRaptor_handle_statement(user_data, rsp unsafe.Pointer)
 for internal use only. callback from the C statement handler for the parser
 export GoRaptor_handle_statement
 
@@ -87,6 +112,14 @@ func (l *Literal) String() string
 
 func (l *Literal) Type() uint8
 
+type LogHandler func(int, string)
+LogHandler functions are called from parsers and serialisers. They
+are colled with a log level integer and a log message string. The
+default implementation pretty prints the level and the string using
+the generic log package
+
+type NamespaceHandler func(string, string)
+
 type Parser struct {
     // contains unexported fields
 }
@@ -98,6 +131,30 @@ func (p *Parser) Free()
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement
 
 func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement
+
+func (p *Parser) SetLogHandler(handler LogHandler)
+
+func (p *Parser) SetNamespaceHandler(handler NamespaceHandler)
+
+type Serializer struct {
+    // contains unexported fields
+}
+
+func NewSerializer(name string) *Serializer
+
+func (s *Serializer) Add(statement *Statement) (err os.Error)
+
+func (s *Serializer) AddN(ch chan *Statement)
+
+func (s *Serializer) Free()
+
+func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string, err os.Error)
+
+func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error)
+
+func (s *Serializer) SetLogHandler(handler LogHandler)
+
+func (s *Serializer) SetNamespace(prefix, uri string)
 
 type Statement struct {
     Subject, Predicate, Object, Graph Term
