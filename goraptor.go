@@ -60,7 +60,6 @@ by Go but can be converted back and forth to/from raptor's
 internal representation. The datatypes support a compact
 binary encoding for use with the gob package.
 
-There is no support for the serialiser yet.
 */
 package goraptor
 
