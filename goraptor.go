@@ -47,6 +47,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 	"unsafe"
@@ -58,11 +59,29 @@ const (
 	RAPTOR_TERM_TYPE_LITERAL = C.RAPTOR_TERM_TYPE_LITERAL
 )
 
+const (
+	RAPTOR_LOG_LEVEL_NONE = C.RAPTOR_LOG_LEVEL_NONE
+	RAPTOR_LOG_LEVEL_TRACE = C.RAPTOR_LOG_LEVEL_TRACE
+	RAPTOR_LOG_LEVEL_DEBUG = C.RAPTOR_LOG_LEVEL_DEBUG
+	RAPTOR_LOG_LEVEL_INFO = C.RAPTOR_LOG_LEVEL_INFO
+	RAPTOR_LOG_LEVEL_WARN = C.RAPTOR_LOG_LEVEL_WARN
+	RAPTOR_LOG_LEVEL_ERROR = C.RAPTOR_LOG_LEVEL_ERROR
+	RAPTOR_LOG_LEVEL_FATAL = C.RAPTOR_LOG_LEVEL_FATAL
+)
+
 var world_lock sync.Mutex
 var global_world *C.raptor_world
 
 func init() {
 	Reset()
+	LogLevels = make(map[int]string)
+	LogLevels[RAPTOR_LOG_LEVEL_NONE] = "NONE"
+	LogLevels[RAPTOR_LOG_LEVEL_TRACE] = "TRACE"
+	LogLevels[RAPTOR_LOG_LEVEL_DEBUG] = "DEBUG"
+	LogLevels[RAPTOR_LOG_LEVEL_INFO] = "INFO"
+	LogLevels[RAPTOR_LOG_LEVEL_WARN] = "WARN"
+	LogLevels[RAPTOR_LOG_LEVEL_ERROR] = "ERROR"
+	LogLevels[RAPTOR_LOG_LEVEL_FATAL] = "FATAL"
 }
 
 func Reset() {
@@ -572,10 +591,33 @@ func (s *Statement) GobDecode(buf []byte) (err os.Error) {
 	return
 }
 
+/*
+LogHandler functions are called from parsers and serialisers. They
+are colled with a log level integer and a log message string. The
+default implementation pretty prints the level and the string using
+the generic log package
+*/
+type LogHandler func(int, string)
+
+/*
+For convenience a mapping of log levels to human readable strings.
+*/
+var LogLevels map[int]string
+
+// For internal use only, callback for log messages from C. Arranges
+// that the configured log handler will be called.
+//export GoRaptor_handle_log
+func GoRaptor_handle_log(user_data, msgp unsafe.Pointer) {
+	message := (*C.raptor_log_message)(msgp)
+	text := C.GoString(message.text)
+	handler := (*LogHandler)(user_data)
+	(*handler)(int(message.level), text)
+}
+
 type Parser struct {
+	mutex  sync.Mutex
 	world  *C.raptor_world
 	parser *C.raptor_parser
-	lock   sync.Mutex
 	out    chan *Statement
 }
 
@@ -584,22 +626,27 @@ func NewParser(name string) *Parser {
 	world := C.raptor_new_world_internal(C.RAPTOR_VERSION)
 	rparser := C.raptor_new_parser(world, cname)
 	parser := &Parser{world: world, parser: rparser}
-	C.go_raptor_parser_set_statement_handler(rparser, unsafe.Pointer(parser))
 	C.free(unsafe.Pointer(cname))
+	C.go_raptor_parser_set_statement_handler(rparser, unsafe.Pointer(parser))
+	parser.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
 	return parser
 }
 
 func (p *Parser) Free() {
-	p.lock.Lock()
+	p.mutex.Lock()
 	C.raptor_free_parser(p.parser)
 	C.raptor_free_world(p.world)
-	p.lock.Unlock()
+	p.mutex.Unlock()
+}
+
+func (p *Parser) SetLogHandler(handler LogHandler) {
+	C.go_raptor_set_log_handler(p.world, unsafe.Pointer(&handler))
 }
 
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
 	p.out = make(chan *Statement)
 	go func() {
-		p.lock.Lock()
+		p.mutex.Lock()
 
 		cfilename := C.CString(filename)
 		uri_string := C.raptor_uri_filename_to_uri_string(cfilename)
@@ -622,7 +669,7 @@ func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
 		C.raptor_free_uri(uri)
 		C.raptor_free_uri(buri)
 
-		p.lock.Unlock()
+		p.mutex.Unlock()
 
 		close(p.out)
 	}()
@@ -632,7 +679,7 @@ func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
 func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 	p.out = make(chan *Statement)
 	go func() {
-		p.lock.Lock()
+		p.mutex.Lock()
 
 		curi := C.CString(uri)
 		ruri := C.raptor_new_uri(p.world, (*C.uchar)(unsafe.Pointer(curi)))
@@ -652,7 +699,7 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 		C.raptor_free_uri(ruri)
 		C.raptor_free_uri(buri)
 
-		p.lock.Unlock()
+		p.mutex.Unlock()
 
 		close(p.out)
 	}()
@@ -661,7 +708,7 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 
 //for internal use only. callback from the C statement handler for the parser
 //export GoRaptor_handle_statement
-func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer) {
+func GoRaptor_handle_statement(user_data, rsp unsafe.Pointer) {
 	// must be called with parser.lock held
 	defer func() {} ()
 	parser := (*Parser)(user_data)
@@ -672,4 +719,32 @@ func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer) {
 	s.Object = term_to_go(rs.object)
 	s.Graph = term_to_go(rs.graph)
 	parser.out <- &s
+}
+
+
+type Serializer struct {
+	mutex  sync.Mutex
+	world  *C.raptor_world
+	serializer *C.raptor_serializer
+}
+
+func NewSerializer(name string) *Serializer {
+	cname := C.CString(name)
+	world := C.raptor_new_world_internal(C.RAPTOR_VERSION)
+	rserializer := C.raptor_new_serializer(world, cname)
+	serializer := &Serializer{world: world, serializer: rserializer}
+	C.free(unsafe.Pointer(cname))
+	serializer.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
+	return serializer
+}
+
+func (s *Serializer) Free() {
+	s.mutex.Lock()
+	C.raptor_free_serializer(s.serializer)
+	C.raptor_free_world(s.world)
+	s.mutex.Unlock()
+}
+
+func (s *Serializer) SetLogHandler(handler LogHandler) {
+	C.go_raptor_set_log_handler(s.world, unsafe.Pointer(&handler))
 }
