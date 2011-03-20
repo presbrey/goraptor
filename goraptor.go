@@ -618,6 +618,7 @@ type Parser struct {
 	mutex  sync.Mutex
 	world  *C.raptor_world
 	parser *C.raptor_parser
+	namespace_handler NamespaceHandler
 	out    chan *Statement
 }
 
@@ -628,7 +629,9 @@ func NewParser(name string) *Parser {
 	parser := &Parser{world: world, parser: rparser}
 	C.free(unsafe.Pointer(cname))
 	C.go_raptor_parser_set_statement_handler(rparser, unsafe.Pointer(parser))
+	C.go_raptor_parser_set_namespace_handler(rparser, unsafe.Pointer(parser))
 	parser.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
+	parser.SetNamespaceHandler(func(prefix, uri string) {})
 	return parser
 }
 
@@ -643,6 +646,11 @@ func (p *Parser) Free() {
 
 func (p *Parser) SetLogHandler(handler LogHandler) {
 	C.go_raptor_set_log_handler(p.world, unsafe.Pointer(&handler))
+}
+
+type NamespaceHandler func(string, string)
+func (p *Parser) SetNamespaceHandler(handler NamespaceHandler) {
+	p.namespace_handler = handler
 }
 
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement {
@@ -712,7 +720,6 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 //export GoRaptor_handle_statement
 func GoRaptor_handle_statement(user_data, rsp unsafe.Pointer) {
 	// must be called with parser.lock held
-	defer func() {} ()
 	parser := (*Parser)(user_data)
 	rs := (*C.raptor_statement)(rsp)
 	s := Statement{}
@@ -723,6 +730,17 @@ func GoRaptor_handle_statement(user_data, rsp unsafe.Pointer) {
 	parser.out <- &s
 }
 
+//for internal use only. callback from the C namespace handler for the parser
+//export GoRaptor_handle_namespace
+func GoRaptor_handle_namespace(user_data, nsp unsafe.Pointer) {
+	parser := (*Parser)(user_data)
+	ns := (*C.raptor_namespace)(nsp)
+	cprefix := C.raptor_namespace_get_prefix(ns)
+	curi := C.raptor_namespace_get_uri(ns)
+	prefix := C.GoString((*C.char)(unsafe.Pointer(cprefix)))
+	uri := C.GoString((*C.char)(unsafe.Pointer(C.raptor_uri_as_string(curi))))
+	parser.namespace_handler(prefix, uri)
+}
 
 type Serializer struct {
 	mutex  sync.Mutex
@@ -762,6 +780,15 @@ func (s *Serializer) SetLogHandler(handler LogHandler) {
 	s.mutex.Lock()
 	C.go_raptor_set_log_handler(s.world, unsafe.Pointer(&handler))
 	s.mutex.Unlock()
+}
+
+func (s *Serializer) SetNamespace(prefix, uri string) {
+	cprefix := C.CString(prefix)
+	curistr := C.CString(uri)
+	curi := C.raptor_new_uri(s.world, (*C.uchar)(unsafe.Pointer(curistr)))
+	C.raptor_serializer_set_namespace(s.serializer, curi, (*C.uchar)(unsafe.Pointer(cprefix)))
+	C.free(unsafe.Pointer(cprefix))
+	C.free(unsafe.Pointer(curistr))
 }
 
 func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {

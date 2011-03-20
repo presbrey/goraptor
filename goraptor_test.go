@@ -170,7 +170,9 @@ func TestRaptorSerializeString(t *testing.T) {
 
 	serializer := NewSerializer("turtle")
 	defer serializer.Free()
-	
+
+	parser.SetNamespaceHandler(func(prefix, uri string) { serializer.SetNamespace(prefix, uri) })
+
 	statements := parser.ParseFile("foaf.rdf", "")
 	str, err := serializer.Serialize(statements, "")
 	if err != nil {
@@ -179,6 +181,7 @@ func TestRaptorSerializeString(t *testing.T) {
 	if len(str) == 0 {
 		t.Errorf("serialize to string failed, got empty string")
 	}
+//	log.Print(str)
 }
 
 func TestTiger(t *testing.T) {
