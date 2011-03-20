@@ -9,6 +9,24 @@ import (
 	"time"
 )
 
+func TestGlobal(t *testing.T) {
+	log.Print("[log levels]")
+	for level, str := range LogLevels {
+		log.Printf("%d - %s", level, str)
+	}
+	log.Print(" ")
+	log.Print("[parser syntax]")
+	for _, s := range ParserSyntax {
+		log.Print(s)
+	}
+	log.Print(" ")
+	log.Print("[serializer syntax]")
+	for _, s := range SerializerSyntax {
+		log.Print(s)
+	}
+	log.Print(" ")
+}
+
 func codec(s *Statement) (err os.Error) {
 	subj := s.Subject
 	pred := s.Predicate
