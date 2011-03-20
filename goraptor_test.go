@@ -142,6 +142,45 @@ func TestRaptorParseUri(t *testing.T) {
 	}
 }
 
+func TestRaptorSerializeFile(t *testing.T) {
+	parser := NewParser("rdfxml")
+	defer parser.Free()
+
+	serializer := NewSerializer("turtle")
+	defer serializer.Free()
+
+	fp, err := os.Open("/dev/null", os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("Open(/dev/null): %s", err)
+	}
+	defer fp.Close()
+
+	err = serializer.SetFile(fp, "")
+	if err != nil {
+		t.Fatalf("SetFile(%s, \"\"): %s", fp, err)
+	}
+
+	statements := parser.ParseFile("foaf.rdf", "")
+	serializer.AddN(statements)
+}
+
+func TestRaptorSerializeString(t *testing.T) {
+	parser := NewParser("rdfxml")
+	defer parser.Free()
+
+	serializer := NewSerializer("turtle")
+	defer serializer.Free()
+	
+	statements := parser.ParseFile("foaf.rdf", "")
+	str, err := serializer.Serialize(statements, "")
+	if err != nil {
+		t.Fatalf("Serialize(): %s", err)
+	}
+	if len(str) == 0 {
+		t.Errorf("serialize to string failed, got empty string")
+	}
+}
+
 func TestTiger(t *testing.T) {
 	parser := NewParser("ntriples")
 	ch := parser.ParseFile("TGR06001.nt", "")

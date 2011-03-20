@@ -635,7 +635,9 @@ func NewParser(name string) *Parser {
 func (p *Parser) Free() {
 	p.mutex.Lock()
 	C.raptor_free_parser(p.parser)
+	p.parser = nil
 	C.raptor_free_world(p.world)
+	p.world = nil
 	p.mutex.Unlock()
 }
 
@@ -726,6 +728,7 @@ type Serializer struct {
 	mutex  sync.Mutex
 	world  *C.raptor_world
 	serializer *C.raptor_serializer
+	running bool
 }
 
 func NewSerializer(name string) *Serializer {
@@ -740,11 +743,129 @@ func NewSerializer(name string) *Serializer {
 
 func (s *Serializer) Free() {
 	s.mutex.Lock()
+	if s.running {
+		s.end()
+	}
 	C.raptor_free_serializer(s.serializer)
+	s.serializer = nil
 	C.raptor_free_world(s.world)
+	s.world = nil
 	s.mutex.Unlock()
 }
 
+func (s *Serializer) end() {
+	C.raptor_serializer_serialize_end(s.serializer)
+	s.running = false
+}
+
 func (s *Serializer) SetLogHandler(handler LogHandler) {
+	s.mutex.Lock()
 	C.go_raptor_set_log_handler(s.world, unsafe.Pointer(&handler))
+	s.mutex.Unlock()
+}
+
+func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	fd := fp.Fd()
+	mode := C.CString("w")
+	cfp, err := C.fdopen(C.int(fd), mode) // do something better with mode?
+	C.free(unsafe.Pointer(mode))
+	if err != nil {
+		return
+	}
+
+	var buri *C.raptor_uri
+	if len(base_uri) > 0 {
+		cbase_uri := C.CString(base_uri)
+		buri = C.raptor_new_uri(s.world, (*C.uchar)(unsafe.Pointer(cbase_uri)))
+		C.free(unsafe.Pointer(cbase_uri))
+		defer C.raptor_free_uri(buri)
+	}
+	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, cfp) != 0 {
+		err = os.ErrorString("C.raptor_serializer_start_to_file_handle failed")
+		return
+	}
+
+	s.running = true
+
+	return
+}
+
+func(s *Serializer) add(statement *Statement) (err os.Error) {
+	rs := statement.raptor_statement()
+	if C.raptor_serializer_serialize_statement(s.serializer, rs) != 0 {
+		err = os.ErrorString("raptor_serializer_serialize_statement failed")
+	}
+	C.raptor_free_statement(rs)
+	return
+}
+
+func (s *Serializer) Add(statement *Statement) (err os.Error) {
+	s.mutex.Lock()
+	err = s.add(statement)
+	s.mutex.Unlock()
+	return
+}
+
+func (s *Serializer) AddN(ch chan *Statement) {
+	s.mutex.Lock()
+	for {
+		statement, ok := <-ch
+		if ! ok {
+			break
+		}
+		s.add(statement)
+	}
+	s.mutex.Unlock()
+}
+
+func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string, err os.Error) {
+	var cstrp unsafe.Pointer
+	var cstrlen C.size_t
+	var buri *C.raptor_uri
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.running {
+		err = os.ErrorString("serializer already running")
+		return
+	}
+	s.running = true
+
+	if len(base_uri) > 0 {
+		cbase_uri := C.CString(base_uri)
+		buri = C.raptor_new_uri(s.world, (*C.uchar)(unsafe.Pointer(cbase_uri)))
+		C.free(unsafe.Pointer(cbase_uri))
+		defer C.raptor_free_uri(buri)
+	}
+
+	if C.raptor_serializer_start_to_string(s.serializer, buri, &cstrp, &cstrlen) != 0 {
+		err = os.ErrorString("raptor_serializer_start_to_string failed")
+		return
+	}
+
+	for {
+		statement, ok := <- ch
+		if ! ok {
+			break
+		}
+		err = s.add(statement)
+		if err != nil {
+			log.Print(err)
+			break
+		}
+	}
+	
+	s.end()
+
+	if cstrp == nil {
+		err = os.ErrorString("serialising failed")
+		return
+	}
+	str = C.GoString((*C.char)(cstrp))
+	C.free(cstrp)
+
+	return
 }
