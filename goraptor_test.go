@@ -105,8 +105,8 @@ func TestRaptorParseFile(t *testing.T) {
 	exp := 153
 	out := parser.ParseFile("foaf.rdf", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if ! ok {
 			break
 		}
 		count++
@@ -127,8 +127,8 @@ func TestRaptorParseUri(t *testing.T) {
 	count := 0
 	out := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if !ok {
 			break
 		}
 		count++
@@ -148,8 +148,8 @@ func TestTiger(t *testing.T) {
 	count := 0
 	start := time.Nanoseconds()
 	for {
-		s := <-ch
-		if closed(ch) {
+		s, ok := <-ch
+		if !ok {
 			break
 		}
 		_ = fmt.Sprintf("%s", s)
@@ -169,8 +169,8 @@ func benchParse() {
 	parser := NewParser("rdfxml")
 	out := parser.ParseFile("foaf.rdf", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if !ok {
 			break
 		}
 		codec(s)

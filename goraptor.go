@@ -15,8 +15,8 @@ Example usage:
 
 	ch := parser.ParseUri("www.w3.org/People/Berners-Lee/card", "")
         for {
-                statement := <-ch
-                if closed(ch) {
+                statement, ok := <-ch
+                if ! ok {
                         break
                 }
 		// do something with statement
