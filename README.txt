@@ -14,17 +14,47 @@ installed. You can get raptor from http://librdf.org/raptor/
 
 Example usage:
 
-	parser := goraptor.NewParser("guess")
-	defer parser.Free()
+    parser := goraptor.NewParser("guess")
+    defer parser.Free()
 
-	ch := parser.ParseUri("www.w3.org/People/Berners-Lee/card", "")
-        for {
-                statement, ok := <-ch
-                if ! ok {
-                        break
-                }
-		// do something with statement
+    ch := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
+    for {
+        statement, ok := <-ch
+        if ! ok {
+            break
         }
+
+        // do something with statement
+     }
+
+Serialisers are analogous. For example to read in one serialisation
+and write in another, preserving namespaces:
+
+    parser := goraptor.NewParser("guess")
+    defer parser.Free()
+
+    serializer := goraptor.NewSerializer("turtle")
+    defer serializer.Free()
+
+    parser.SetNamespaceHandler(func(pfx, uri string) { serializer.SetNamespace(pfx, uri) })
+
+    statements := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
+    str, err := serializer.Serialize(statements, "")
+
+    fmt.Print(str)
+
+The step of setting the namespace handler is strictly unnecessary
+and is basically used so that the output is more aesthetically
+pleasing. If instead of serializing to a string you want to serialize
+to a file, you can do instead:
+
+    fp := os.Open("output.ttl", os.O_WRONLY, 0644)
+    serializer.SetFile(fp, "")
+    serializer.AddN(statements)
+
+Note that it is strictly necessary to free the serializer for only then
+can it be guaranteed that any buffered output is written to the
+destination file.
 
 The basic datatype is the Term which represents an RDF URI,
 blank node or literal value. Terms are grouped into compound
