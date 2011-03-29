@@ -9,6 +9,24 @@ import (
 	"time"
 )
 
+func TestGlobal(t *testing.T) {
+	log.Print("[log levels]")
+	for level, str := range LogLevels {
+		log.Printf("%d - %s", level, str)
+	}
+	log.Print(" ")
+	log.Print("[parser syntax]")
+	for _, s := range ParserSyntax {
+		log.Print(s)
+	}
+	log.Print(" ")
+	log.Print("[serializer syntax]")
+	for _, s := range SerializerSyntax {
+		log.Print(s)
+	}
+	log.Print(" ")
+}
+
 func codec(s *Statement) (err os.Error) {
 	subj := s.Subject
 	pred := s.Predicate
@@ -105,8 +123,8 @@ func TestRaptorParseFile(t *testing.T) {
 	exp := 153
 	out := parser.ParseFile("foaf.rdf", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if ! ok {
 			break
 		}
 		count++
@@ -127,8 +145,8 @@ func TestRaptorParseUri(t *testing.T) {
 	count := 0
 	out := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if !ok {
 			break
 		}
 		count++
@@ -142,14 +160,56 @@ func TestRaptorParseUri(t *testing.T) {
 	}
 }
 
+func TestRaptorSerializeFile(t *testing.T) {
+	parser := NewParser("rdfxml")
+	defer parser.Free()
+
+	serializer := NewSerializer("turtle")
+	defer serializer.Free()
+
+	fp, err := os.Open("/dev/null", os.O_WRONLY, 0644)
+	if err != nil {
+		t.Fatalf("Open(/dev/null): %s", err)
+	}
+	defer fp.Close()
+
+	err = serializer.SetFile(fp, "")
+	if err != nil {
+		t.Fatalf("SetFile(%s, \"\"): %s", fp, err)
+	}
+
+	statements := parser.ParseFile("foaf.rdf", "")
+	serializer.AddN(statements)
+}
+
+func TestRaptorSerializeString(t *testing.T) {
+	parser := NewParser("rdfxml")
+	defer parser.Free()
+
+	serializer := NewSerializer("turtle")
+	defer serializer.Free()
+
+	parser.SetNamespaceHandler(func(prefix, uri string) { serializer.SetNamespace(prefix, uri) })
+
+	statements := parser.ParseFile("foaf.rdf", "")
+	str, err := serializer.Serialize(statements, "")
+	if err != nil {
+		t.Fatalf("Serialize(): %s", err)
+	}
+	if len(str) == 0 {
+		t.Errorf("serialize to string failed, got empty string")
+	}
+//	log.Print(str)
+}
+
 func TestTiger(t *testing.T) {
 	parser := NewParser("ntriples")
 	ch := parser.ParseFile("TGR06001.nt", "")
 	count := 0
 	start := time.Nanoseconds()
 	for {
-		s := <-ch
-		if closed(ch) {
+		s, ok := <-ch
+		if !ok {
 			break
 		}
 		_ = fmt.Sprintf("%s", s)
@@ -169,8 +229,8 @@ func benchParse() {
 	parser := NewParser("rdfxml")
 	out := parser.ParseFile("foaf.rdf", "")
 	for {
-		s := <-out
-		if closed(out) {
+		s, ok := <-out
+		if !ok {
 			break
 		}
 		codec(s)

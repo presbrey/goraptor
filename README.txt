@@ -14,17 +14,47 @@ installed. You can get raptor from http://librdf.org/raptor/
 
 Example usage:
 
-	parser := goraptor.NewParser("guess")
-	defer parser.Free()
+    parser := goraptor.NewParser("guess")
+    defer parser.Free()
 
-	ch := parser.ParseUri("www.w3.org/People/Berners-Lee/card", "")
-        for {
-                statement := <-ch
-                if closed(ch) {
-                        break
-                }
-		// do something with statement
+    ch := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
+    for {
+        statement, ok := <-ch
+        if ! ok {
+            break
         }
+
+        // do something with statement
+     }
+
+Serialisers are analogous. For example to read in one serialisation
+and write in another, preserving namespaces:
+
+    parser := goraptor.NewParser("guess")
+    defer parser.Free()
+
+    serializer := goraptor.NewSerializer("turtle")
+    defer serializer.Free()
+
+    parser.SetNamespaceHandler(func(pfx, uri string) { serializer.SetNamespace(pfx, uri) })
+
+    statements := parser.ParseUri("http://www.w3.org/People/Berners-Lee/card", "")
+    str, err := serializer.Serialize(statements, "")
+
+    fmt.Print(str)
+
+The step of setting the namespace handler is strictly unnecessary
+and is basically used so that the output is more aesthetically
+pleasing. If instead of serializing to a string you want to serialize
+to a file, you can do instead:
+
+    fp := os.Open("output.ttl", os.O_WRONLY, 0644)
+    serializer.SetFile(fp, "")
+    serializer.AddN(statements)
+
+Note that it is strictly necessary to free the serializer for only then
+can it be guaranteed that any buffered output is written to the
+destination file.
 
 The basic datatype is the Term which represents an RDF URI,
 blank node or literal value. Terms are grouped into compound
@@ -33,8 +63,6 @@ Object and Graph. Both of these datatypes are memory managed
 by Go but can be converted back and forth to/from raptor's
 internal representation. The datatypes support a compact
 binary encoding for use with the gob package.
-
-There is no support for the serialiser yet.
 
 
 CONSTANTS
@@ -45,10 +73,41 @@ const (
     RAPTOR_TERM_TYPE_LITERAL = C.RAPTOR_TERM_TYPE_LITERAL
 )
 
+const (
+    RAPTOR_LOG_LEVEL_NONE  = C.RAPTOR_LOG_LEVEL_NONE
+    RAPTOR_LOG_LEVEL_TRACE = C.RAPTOR_LOG_LEVEL_TRACE
+    RAPTOR_LOG_LEVEL_DEBUG = C.RAPTOR_LOG_LEVEL_DEBUG
+    RAPTOR_LOG_LEVEL_INFO  = C.RAPTOR_LOG_LEVEL_INFO
+    RAPTOR_LOG_LEVEL_WARN  = C.RAPTOR_LOG_LEVEL_WARN
+    RAPTOR_LOG_LEVEL_ERROR = C.RAPTOR_LOG_LEVEL_ERROR
+    RAPTOR_LOG_LEVEL_FATAL = C.RAPTOR_LOG_LEVEL_FATAL
+)
+
+
+VARIABLES
+
+var LogLevels map[int]string
+For convenience a mapping of log levels to human readable strings.
+
+var ParserSyntax map[string]*Syntax
+global map of parser name to parser description
+
+var SerializerSyntax map[string]*Syntax
+global map of serializer name to serializer description
+
 
 FUNCTIONS
 
-func GoRaptor_handle_statement(user_data unsafe.Pointer, rsp unsafe.Pointer)
+func GoRaptor_handle_log(user_data, msgp unsafe.Pointer)
+For internal use only, callback for log messages from C. Arranges
+that the configured log handler will be called.
+export GoRaptor_handle_log
+
+func GoRaptor_handle_namespace(user_data, nsp unsafe.Pointer)
+for internal use only. callback from the C namespace handler for the parser
+export GoRaptor_handle_namespace
+
+func GoRaptor_handle_statement(user_data, rsp unsafe.Pointer)
 for internal use only. callback from the C statement handler for the parser
 export GoRaptor_handle_statement
 
@@ -87,6 +146,16 @@ func (l *Literal) String() string
 
 func (l *Literal) Type() uint8
 
+type LogHandler func(int, string)
+LogHandler functions are called from parsers and serialisers. They
+are colled with a log level integer and a log message string. The
+default implementation pretty prints the level and the string using
+the generic log package
+
+type NamespaceHandler func(prefix string, uri string)
+A handler function to be called when the parser encounters
+a namespace.
+
 type Parser struct {
     // contains unexported fields
 }
@@ -96,8 +165,37 @@ func NewParser(name string) *Parser
 func (p *Parser) Free()
 
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement
+parse a local file
 
 func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement
+parse a network resource
+
+func (p *Parser) SetLogHandler(handler LogHandler)
+set the log handler which by default will use the generic log package
+
+func (p *Parser) SetNamespaceHandler(handler NamespaceHandler)
+set the namespace handler which is by default a noop
+
+type Serializer struct {
+    // contains unexported fields
+}
+
+func NewSerializer(name string) *Serializer
+
+func (s *Serializer) Add(statement *Statement) (err os.Error)
+
+func (s *Serializer) AddN(ch chan *Statement)
+
+func (s *Serializer) Free()
+
+func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string, err os.Error)
+
+func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error)
+
+func (s *Serializer) SetLogHandler(handler LogHandler)
+set the log handler which by default will use the generic log package
+
+func (s *Serializer) SetNamespace(prefix, uri string)
 
 type Statement struct {
     Subject, Predicate, Object, Graph Term
@@ -112,6 +210,15 @@ func (s *Statement) GobEncode() (buf []byte, err os.Error)
 func (s *Statement) N3() string
 
 func (s *Statement) String() string
+
+type Syntax struct {
+    Label    string
+    Name     string
+    MimeType string
+}
+struct holding some details of available parsers or serializers
+
+func (s *Syntax) String() string
 
 type Term interface {
     Type() uint8
