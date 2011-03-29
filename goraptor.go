@@ -365,36 +365,36 @@ func (b *Blank) GobDecode(buf []byte) (err os.Error) {
 }
 
 type Literal struct {
-	value    string
-	lang     string
-	datatype string
+	Value    string
+	Lang     string
+	Datatype string
 }
 
 func literal_from_term(term *C.raptor_term) Term {
 	literal := Literal{}
 	lval := (*C.raptor_term_literal_value)(unsafe.Pointer(&term.value))
-	literal.value = C.GoString((*C.char)(unsafe.Pointer(lval.string)))
+	literal.Value = C.GoString((*C.char)(unsafe.Pointer(lval.string)))
 	if int(lval.language_len) != 0 {
-		literal.lang = C.GoString((*C.char)(unsafe.Pointer(lval.language)))
+		literal.Lang = C.GoString((*C.char)(unsafe.Pointer(lval.language)))
 	}
 	if lval.datatype != nil {
 		dtstr := C.raptor_uri_as_string(lval.datatype)
-		literal.datatype = C.GoString((*C.char)(unsafe.Pointer(dtstr)))
+		literal.Datatype = C.GoString((*C.char)(unsafe.Pointer(dtstr)))
 	}
 	return &literal
 }
 
 func (l *Literal) raptor_term() (term *C.raptor_term) {
-	value := (*C.uchar)(unsafe.Pointer(C.CString(l.value)))
-	llen := len(l.value)
+	value := (*C.uchar)(unsafe.Pointer(C.CString(l.Value)))
+	llen := len(l.Value)
 	var lang *C.uchar
-	langlen := len(l.lang)
+	langlen := len(l.Lang)
 	if langlen != 0 {
-		lang = (*C.uchar)(unsafe.Pointer(C.CString(l.lang)))
+		lang = (*C.uchar)(unsafe.Pointer(C.CString(l.Lang)))
 	}
 	var datatype *C.raptor_uri
-	if len(l.datatype) != 0 {
-		dtstr := (*C.uchar)(unsafe.Pointer(C.CString(l.datatype)))
+	if len(l.Datatype) != 0 {
+		dtstr := (*C.uchar)(unsafe.Pointer(C.CString(l.Datatype)))
 		datatype = C.raptor_new_uri(global_world, dtstr)
 		C.free(unsafe.Pointer(dtstr))
 	}
@@ -421,7 +421,7 @@ func (l *Literal) N3() (s string) {
 	return
 }
 func (l *Literal) String() string {
-	return l.value
+	return l.Value
 }
 func (l *Literal) Equals(other Term) (eq bool) {
 	world_lock.Lock()
@@ -444,14 +444,14 @@ const (
 func (l *Literal) GobEncode() (buf []byte, err os.Error) {
 	var flags byte
 	size := 2
-	vlen := len(l.value)
+	vlen := len(l.Value)
 	size += 2 + vlen
-	langlen := len(l.lang)
+	langlen := len(l.Lang)
 	if langlen != 0 {
 		flags |= has_language
 		size += 1 + langlen
 	}
-	dtlen := len(l.datatype)
+	dtlen := len(l.Datatype)
 	if dtlen != 0 {
 		flags |= has_datatype
 		size += 2 + dtlen
@@ -462,15 +462,15 @@ func (l *Literal) GobEncode() (buf []byte, err os.Error) {
 	sbuf := make([]byte, 2)
 	binary.BigEndian.PutUint16(sbuf, uint16(vlen))
 	w.Write(sbuf)
-	w.WriteString(l.value)
+	w.WriteString(l.Value)
 	if langlen != 0 {
 		w.WriteByte(byte(langlen))
-		w.WriteString(l.lang)
+		w.WriteString(l.Lang)
 	}
 	if dtlen != 0 {
 		binary.BigEndian.PutUint16(sbuf, uint16(dtlen))
 		w.Write(sbuf)
-		w.WriteString(l.datatype)
+		w.WriteString(l.Datatype)
 	}
 	buf = w.Bytes()
 	return
@@ -492,20 +492,20 @@ func (l *Literal) GobDecode(buf []byte) (err os.Error) {
 	offset := 2
 	llen := int(binary.BigEndian.Uint16(buf[offset : offset+2]))
 	offset += 2
-	l.value = string(buf[offset : offset+llen])
+	l.Value = string(buf[offset : offset+llen])
 	offset += int(llen)
 
 	if flags&has_language != 0 {
 		langlen := int(buf[offset])
 		offset++
-		l.lang = string(buf[offset : offset+langlen])
+		l.Lang = string(buf[offset : offset+langlen])
 		offset += int(langlen)
 	}
 
 	if flags&has_datatype != 0 {
 		dtlen := int(binary.BigEndian.Uint16(buf[offset : offset+2]))
 		offset += 2
-		l.datatype = string(buf[offset : offset+dtlen])
+		l.Datatype = string(buf[offset : offset+dtlen])
 	}
 	return
 }
