@@ -131,7 +131,9 @@ func (b *Blank) String() string
 func (b *Blank) Type() uint8
 
 type Literal struct {
-    // contains unexported fields
+    Value    string
+    Lang     string
+    Datatype string
 }
 
 func (l *Literal) Equals(other Term) (eq bool)
