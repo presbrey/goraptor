@@ -124,7 +124,7 @@ func TestRaptorParseFile(t *testing.T) {
 	out := parser.ParseFile("foaf.rdf", "")
 	for {
 		s, ok := <-out
-		if ! ok {
+		if !ok {
 			break
 		}
 		count++
@@ -167,7 +167,7 @@ func TestRaptorSerializeFile(t *testing.T) {
 	serializer := NewSerializer("turtle")
 	defer serializer.Free()
 
-	fp, err := os.Open("/dev/null", os.O_WRONLY, 0644)
+	fp, err := os.OpenFile("/dev/null", os.O_WRONLY, 0644)
 	if err != nil {
 		t.Fatalf("Open(/dev/null): %s", err)
 	}
@@ -199,7 +199,7 @@ func TestRaptorSerializeString(t *testing.T) {
 	if len(str) == 0 {
 		t.Errorf("serialize to string failed, got empty string")
 	}
-//	log.Print(str)
+	//	log.Print(str)
 }
 
 func TestTiger(t *testing.T) {
