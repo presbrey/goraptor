@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -157,6 +158,29 @@ func TestRaptorParseUri(t *testing.T) {
 	}
 	if count == 0 {
 		t.Errorf("Expected to find some statements... maybe there is no network?")
+	}
+}
+
+func TestRaptorParseBuf(t *testing.T) {
+	turtle := `
+@prefix ex: <http://example.org/>.
+
+ex:foo ex:p1 [ ex:bar "hello" ].
+_:b1 ex:p2 ex:foo.
+`
+	parser := NewParser("turtle")
+	defer parser.Free()
+
+	count := 0
+	for s := range parser.Parse(strings.NewReader(turtle), "http://example.org/") {
+		count++
+		err := codec(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 3 {
+		t.Errorf("Expected to find three statements")
 	}
 }
 

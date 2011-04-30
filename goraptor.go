@@ -77,6 +77,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"io"
 	"os"
 	"sync"
 	"unsafe"
@@ -799,6 +800,34 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 
 		p.mutex.Unlock()
 
+		close(p.out)
+	}()
+	return p.out
+}
+
+// Parse RDF data from an io.Reader
+func (p *Parser) Parse(reader io.Reader, base_uri string) chan *Statement {
+	p.out = make(chan *Statement)
+	go func () {
+		p.mutex.Lock()
+
+		cbase_uri := C.CString(base_uri)
+		buri := C.raptor_new_uri(p.world, (*C.uchar)(unsafe.Pointer(cbase_uri)))
+		C.free(unsafe.Pointer(cbase_uri))
+
+		if C.raptor_parser_parse_start(p.parser, buri) == 0 {
+			buf := make([]byte, 8192)
+			for {
+				n, err := reader.Read(buf)
+				if err != nil {
+					break
+				}
+				C.raptor_parser_parse_chunk(p.parser, (*C.uchar)(unsafe.Pointer(&buf[0])), C.size_t(n), 0)
+			}
+			C.raptor_parser_parse_chunk(p.parser, nil, 0, 1)
+		}
+
+		p.mutex.Unlock()
 		close(p.out)
 	}()
 	return p.out
