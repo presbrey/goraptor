@@ -166,6 +166,9 @@ func NewParser(name string) *Parser
 
 func (p *Parser) Free()
 
+func (p *Parser) Parse(reader io.Reader, base_uri string) chan *Statement
+Parse from an io.Reader
+
 func (p *Parser) ParseFile(filename string, base_uri string) chan *Statement
 parse a local file
 
@@ -248,6 +251,10 @@ func (u *Uri) String() string
 
 func (u *Uri) Type() uint8
 
+
+OTHER PACKAGES
+
+main
 
 SUBDIRECTORIES
 

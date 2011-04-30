@@ -28,7 +28,7 @@ and write in another, preserving namespaces:
 
     parser := goraptor.NewParser("guess")
     defer parser.Free()
- 
+
     serializer := goraptor.NewSerializer("turtle")
     defer serializer.Free()
 
@@ -89,11 +89,11 @@ const (
 )
 
 const (
-	RAPTOR_LOG_LEVEL_NONE = C.RAPTOR_LOG_LEVEL_NONE
+	RAPTOR_LOG_LEVEL_NONE  = C.RAPTOR_LOG_LEVEL_NONE
 	RAPTOR_LOG_LEVEL_TRACE = C.RAPTOR_LOG_LEVEL_TRACE
 	RAPTOR_LOG_LEVEL_DEBUG = C.RAPTOR_LOG_LEVEL_DEBUG
-	RAPTOR_LOG_LEVEL_INFO = C.RAPTOR_LOG_LEVEL_INFO
-	RAPTOR_LOG_LEVEL_WARN = C.RAPTOR_LOG_LEVEL_WARN
+	RAPTOR_LOG_LEVEL_INFO  = C.RAPTOR_LOG_LEVEL_INFO
+	RAPTOR_LOG_LEVEL_WARN  = C.RAPTOR_LOG_LEVEL_WARN
 	RAPTOR_LOG_LEVEL_ERROR = C.RAPTOR_LOG_LEVEL_ERROR
 	RAPTOR_LOG_LEVEL_FATAL = C.RAPTOR_LOG_LEVEL_FATAL
 )
@@ -103,8 +103,8 @@ var global_world *C.raptor_world
 
 // struct holding some details of available parsers or serializers
 type Syntax struct {
-	Label string
-	Name string
+	Label    string
+	Name     string
 	MimeType string
 }
 
@@ -133,7 +133,7 @@ func init() {
 	Reset()
 
 	ParserSyntax = make(map[string]*Syntax)
-	for i := 0;; i++ {
+	for i := 0; ; i++ {
 		syndesc := C.raptor_world_get_parser_description(global_world, C.uint(i))
 		if syndesc == nil {
 			break
@@ -148,7 +148,7 @@ func init() {
 	}
 
 	SerializerSyntax = make(map[string]*Syntax)
-	for i := 0;; i++ {
+	for i := 0; ; i++ {
 		syndesc := C.raptor_world_get_serializer_description(global_world, C.uint(i))
 		if syndesc == nil {
 			break
@@ -694,11 +694,11 @@ func GoRaptor_handle_log(user_data, msgp unsafe.Pointer) {
 }
 
 type Parser struct {
-	mutex  sync.Mutex
-	world  *C.raptor_world
-	parser *C.raptor_parser
+	mutex             sync.Mutex
+	world             *C.raptor_world
+	parser            *C.raptor_parser
 	namespace_handler NamespaceHandler
-	out    chan *Statement
+	out               chan *Statement
 }
 
 func NewParser(name string) *Parser {
@@ -831,10 +831,10 @@ func GoRaptor_handle_namespace(user_data, nsp unsafe.Pointer) {
 }
 
 type Serializer struct {
-	mutex  sync.Mutex
-	world  *C.raptor_world
+	mutex      sync.Mutex
+	world      *C.raptor_world
 	serializer *C.raptor_serializer
-	running bool
+	running    bool
 }
 
 func NewSerializer(name string) *Serializer {
@@ -908,7 +908,7 @@ func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 	return
 }
 
-func(s *Serializer) add(statement *Statement) (err os.Error) {
+func (s *Serializer) add(statement *Statement) (err os.Error) {
 	rs := statement.raptor_statement()
 	if C.raptor_serializer_serialize_statement(s.serializer, rs) != 0 {
 		err = os.ErrorString("raptor_serializer_serialize_statement failed")
@@ -928,7 +928,7 @@ func (s *Serializer) AddN(ch chan *Statement) {
 	s.mutex.Lock()
 	for {
 		statement, ok := <-ch
-		if ! ok {
+		if !ok {
 			break
 		}
 		s.add(statement)
@@ -963,8 +963,8 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 	}
 
 	for {
-		statement, ok := <- ch
-		if ! ok {
+		statement, ok := <-ch
+		if !ok {
 			break
 		}
 		err = s.add(statement)
@@ -973,7 +973,7 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 			break
 		}
 	}
-	
+
 	s.end()
 
 	if cstrp == nil {
