@@ -808,7 +808,7 @@ func (p *Parser) ParseUri(uri string, base_uri string) chan *Statement {
 // Parse RDF data from an io.Reader
 func (p *Parser) Parse(reader io.Reader, base_uri string) chan *Statement {
 	p.out = make(chan *Statement)
-	go func () {
+	go func() {
 		p.mutex.Lock()
 
 		cbase_uri := C.CString(base_uri)
