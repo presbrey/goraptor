@@ -965,6 +965,46 @@ func (s *Serializer) AddN(ch chan *Statement) {
 	s.mutex.Unlock()
 }
 
+func (s *Serializer) StartStream(file *os.File, base_uri string) (err os.Error) {
+	var buri *C.raptor_uri
+
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.running {
+		err = os.ErrorString("serializer already running")
+		return
+	}
+	s.running = true
+
+	if len(base_uri) > 0 {
+		cbase_uri := C.CString(base_uri)
+		buri = C.raptor_new_uri(s.world, (*C.uchar)(unsafe.Pointer(cbase_uri)))
+		C.free(unsafe.Pointer(cbase_uri))
+		// XXX LEAK defer C.raptor_free_uri(buri)
+	}
+
+	cwb := C.CString("wb")
+	fh := C.fdopen(C.int(file.Fd()), cwb)
+	C.free(unsafe.Pointer(cwb))
+	if fh == nil {
+		err = os.ErrorString("fdopen: ...")
+		return
+	}
+
+	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, fh) != 0 {
+		err = os.ErrorString("raptor_serializer_start_to_file_handle failed")
+		return
+	}
+
+	return
+}
+
+func (s *Serializer) EndStream() (err os.Error) {
+	s.end()
+	return
+}
+
 func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string, err os.Error) {
 	var cstrp unsafe.Pointer
 	var cstrlen C.size_t
