@@ -864,6 +864,7 @@ type Serializer struct {
 	world      *C.raptor_world
 	serializer *C.raptor_serializer
 	running    bool
+	fh         *C.FILE
 }
 
 func NewSerializer(name string) *Serializer {
@@ -890,6 +891,9 @@ func (s *Serializer) Free() {
 
 func (s *Serializer) end() {
 	C.raptor_serializer_serialize_end(s.serializer)
+	if s.fh != nil {
+		C.fflush(s.fh)
+	}		
 	s.running = false
 }
 
@@ -912,13 +916,14 @@ func (s *Serializer) SetNamespace(prefix, uri string) {
 func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	fd := fp.Fd()
+	
 	mode := C.CString("w")
-	cfp, err := C.fdopen(C.int(fd), mode) // do something better with mode?
+	fh, err := C.fdopen(C.int(fp.Fd()), mode) // do something better with mode?
 	C.free(unsafe.Pointer(mode))
 	if err != nil {
 		return
 	}
+	s.fh = fh
 
 	var buri *C.raptor_uri
 	if len(base_uri) > 0 {
@@ -927,7 +932,7 @@ func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 		C.free(unsafe.Pointer(cbase_uri))
 		defer C.raptor_free_uri(buri)
 	}
-	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, cfp) != 0 {
+	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, s.fh) != 0 {
 		err = os.ErrorString("C.raptor_serializer_start_to_file_handle failed")
 		return
 	}
@@ -985,14 +990,15 @@ func (s *Serializer) StartStream(file *os.File, base_uri string) (err os.Error) 
 	}
 
 	cwb := C.CString("wb")
-	fh := C.fdopen(C.int(file.Fd()), cwb)
+	fh, err := C.fdopen(C.int(file.Fd()), cwb)
 	C.free(unsafe.Pointer(cwb))
 	if fh == nil {
 		err = os.ErrorString("fdopen: ...")
 		return
 	}
+	s.fh = fh
 
-	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, fh) != 0 {
+	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, s.fh) != 0 {
 		err = os.ErrorString("raptor_serializer_start_to_file_handle failed")
 		return
 	}
