@@ -292,7 +292,7 @@ func (u *Uri) GobDecode(buf []byte) (err os.Error) {
 	if buf[0] != RAPTOR_TERM_TYPE_URI {
 		errs := fmt.Sprintf("Uri.GobDecode: expected type %d in buffer got %d",
 			RAPTOR_TERM_TYPE_URI, buf[0])
-		err = os.ErrorString(errs)
+		err = os.NewError(errs)
 		return
 	}
 	*u = Uri(buf[1:])
@@ -358,7 +358,7 @@ func (b *Blank) GobDecode(buf []byte) (err os.Error) {
 	if buf[0] != RAPTOR_TERM_TYPE_BLANK {
 		errs := fmt.Sprintf("Blank.GobDecode: expected type %d in buffer got %d",
 			RAPTOR_TERM_TYPE_BLANK, buf[0])
-		err = os.ErrorString(errs)
+		err = os.NewError(errs)
 		return
 	}
 	*b = Blank(buf[1:])
@@ -485,7 +485,7 @@ func (l *Literal) GobDecode(buf []byte) (err os.Error) {
 	if buf[0] != RAPTOR_TERM_TYPE_LITERAL {
 		errs := fmt.Sprintf("Literal.GobDecode: expected type %d in buffer got %d",
 			RAPTOR_TERM_TYPE_LITERAL, buf[0])
-		err = os.ErrorString(errs)
+		err = os.NewError(errs)
 		return
 	}
 	*l = Literal{}
@@ -893,7 +893,7 @@ func (s *Serializer) end() {
 	C.raptor_serializer_serialize_end(s.serializer)
 	if s.fh != nil {
 		C.fflush(s.fh)
-	}		
+	}
 	s.running = false
 }
 
@@ -916,7 +916,7 @@ func (s *Serializer) SetNamespace(prefix, uri string) {
 func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	
+
 	mode := C.CString("w")
 	fh, err := C.fdopen(C.int(fp.Fd()), mode) // do something better with mode?
 	C.free(unsafe.Pointer(mode))
@@ -933,7 +933,7 @@ func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 		defer C.raptor_free_uri(buri)
 	}
 	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, s.fh) != 0 {
-		err = os.ErrorString("C.raptor_serializer_start_to_file_handle failed")
+		err = os.NewError("C.raptor_serializer_start_to_file_handle failed")
 		return
 	}
 
@@ -945,7 +945,7 @@ func (s *Serializer) SetFile(fp *os.File, base_uri string) (err os.Error) {
 func (s *Serializer) add(statement *Statement) (err os.Error) {
 	rs := statement.raptor_statement()
 	if C.raptor_serializer_serialize_statement(s.serializer, rs) != 0 {
-		err = os.ErrorString("raptor_serializer_serialize_statement failed")
+		err = os.NewError("raptor_serializer_serialize_statement failed")
 	}
 	C.raptor_free_statement(rs)
 	return
@@ -977,7 +977,7 @@ func (s *Serializer) StartStream(file *os.File, base_uri string) (err os.Error) 
 	defer s.mutex.Unlock()
 
 	if s.running {
-		err = os.ErrorString("serializer already running")
+		err = os.NewError("serializer already running")
 		return
 	}
 	s.running = true
@@ -993,13 +993,13 @@ func (s *Serializer) StartStream(file *os.File, base_uri string) (err os.Error) 
 	fh, err := C.fdopen(C.int(file.Fd()), cwb)
 	C.free(unsafe.Pointer(cwb))
 	if fh == nil {
-		err = os.ErrorString("fdopen: ...")
+		err = os.NewError("fdopen: ...")
 		return
 	}
 	s.fh = fh
 
 	if C.raptor_serializer_start_to_file_handle(s.serializer, buri, s.fh) != 0 {
-		err = os.ErrorString("raptor_serializer_start_to_file_handle failed")
+		err = os.NewError("raptor_serializer_start_to_file_handle failed")
 		return
 	}
 
@@ -1020,7 +1020,7 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 	defer s.mutex.Unlock()
 
 	if s.running {
-		err = os.ErrorString("serializer already running")
+		err = os.NewError("serializer already running")
 		return
 	}
 	s.running = true
@@ -1033,7 +1033,7 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 	}
 
 	if C.raptor_serializer_start_to_string(s.serializer, buri, &cstrp, &cstrlen) != 0 {
-		err = os.ErrorString("raptor_serializer_start_to_string failed")
+		err = os.NewError("raptor_serializer_start_to_string failed")
 		return
 	}
 
@@ -1052,7 +1052,7 @@ func (s *Serializer) Serialize(ch chan *Statement, base_uri string) (str string,
 	s.end()
 
 	if cstrp == nil {
-		err = os.ErrorString("serialising failed")
+		err = os.NewError("serialising failed")
 		return
 	}
 	str = C.GoString((*C.char)(cstrp))
