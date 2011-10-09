@@ -1,5 +1,5 @@
 #include <stdlib.h>
-#include <raptor2/raptor.h>
+#include <raptor.h>
 #include "craptor.h"
 #include "_cgo_export.h"
 
