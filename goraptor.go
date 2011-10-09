@@ -63,12 +63,12 @@ binary encoding for use with the gob package.
 */
 package goraptor
 
-// #cgo CFLAGS: -I/usr/local/include
+// #cgo CFLAGS: -I/usr/local/include/raptor2
 // #cgo LDFLAGS: -L/usr/local/lib -lraptor2
 // #include <stdlib.h>
 // #include <string.h>
 // #include <strings.h>
-// #include <raptor2/raptor.h>
+// #include <raptor.h>
 // #include "craptor.h"
 import "C"
 
