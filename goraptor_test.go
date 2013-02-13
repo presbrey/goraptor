@@ -1,6 +1,7 @@
 package goraptor
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -28,7 +29,7 @@ func TestGlobal(t *testing.T) {
 	log.Print(" ")
 }
 
-func codec(s *Statement) (err os.Error) {
+func codec(s *Statement) (err error) {
 	subj := s.Subject
 	pred := s.Predicate
 	obj := s.Object
@@ -36,68 +37,68 @@ func codec(s *Statement) (err os.Error) {
 	sbuf, err := subj.GobEncode()
 	if err != nil {
 		errs := fmt.Sprintf("GobEncode(%s): %s", subj, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	pbuf, err := pred.GobEncode()
 	if err != nil {
 		errs := fmt.Sprintf("GobEncode(%s): %s", pred, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	obuf, err := obj.GobEncode()
 	if err != nil {
 		errs := fmt.Sprintf("GobEncode(%s): %s", obj, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 
 	subj2, err := TermDecode(sbuf)
 	if err != nil {
 		errs := fmt.Sprintf("TermDecode(%s): %s", subj, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	pred2, err := TermDecode(pbuf)
 	if err != nil {
 		errs := fmt.Sprintf("TermDecode(%s): %s", pred, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	obj2, err := TermDecode(obuf)
 	if err != nil {
 		errs := fmt.Sprintf("TermDecode(%s): %s", obj, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 
 	if !subj.Equals(subj2) {
 		errs := fmt.Sprintf("%s != %s", subj, subj2)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	if !pred.Equals(pred2) {
 		errs := fmt.Sprintf("%s != %s", pred, pred2)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	if !obj.Equals(obj2) {
 		errs := fmt.Sprintf("%s != %s", obj, obj2)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 
 	s2 := &Statement{subj2, pred2, obj2, nil}
 	if !s.Equals(s2) {
 		errs := fmt.Sprintf("%s != %s", s, s2)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 
 	ssbuf, err := s.GobEncode()
 	if err != nil {
 		errs := fmt.Sprintf("Statement.GobEncode(%s): %s", s, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 
@@ -105,12 +106,12 @@ func codec(s *Statement) (err os.Error) {
 	err = s3.GobDecode(ssbuf)
 	if err != nil {
 		errs := fmt.Sprintf("Statement.GobDecode(%s): %s", s, err)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	if !s.Equals(s3) {
 		errs := fmt.Sprintf("%s != %s", s, s3)
-		err = os.NewError(errs)
+		err = errors.New(errs)
 		return
 	}
 	return
@@ -230,7 +231,7 @@ func TestTiger(t *testing.T) {
 	parser := NewParser("ntriples")
 	ch := parser.ParseFile("TGR06001.nt", "")
 	count := 0
-	start := time.Nanoseconds()
+	start := time.Now()
 	for {
 		s, ok := <-ch
 		if !ok {
@@ -239,13 +240,13 @@ func TestTiger(t *testing.T) {
 		_ = fmt.Sprintf("%s", s)
 		count++
 		if count%10000 == 0 {
-			end := time.Nanoseconds()
-			dt := uint64(count) * 1e9 / uint64(end-start)
+			end := time.Now()
+			dt := uint64(count) * 1e9 / uint64(end.Sub(start))
 			log.Printf("%d statements loaded at %d tps", count, dt)
 		}
 	}
-	end := time.Nanoseconds()
-	dt := uint64(count) * 1e9 / uint64(end-start)
+	end := time.Now()
+	dt := uint64(count) * 1e9 / uint64(end.Sub(start))
 	log.Printf("%d statements loaded at %d tps", count, dt)
 }
 
@@ -264,19 +265,22 @@ func benchParse() {
 }
 
 func BenchmarkCodecMemory(b *testing.B) {
+	m := new(runtime.MemStats)
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < b.N; i++ {
+		runtime.ReadMemStats(m)
 		log.Printf("start alloc: %d total: %d heap: %d",
-			runtime.MemStats.Alloc,
-			runtime.MemStats.TotalAlloc,
-			runtime.MemStats.HeapAlloc)
+			m.Alloc,
+			m.TotalAlloc,
+			m.HeapAlloc)
 		benchParse()
 		Reset()
 		runtime.GC()
-		log.Printf("end alloc: %d total: %d heap: %d",
-			runtime.MemStats.Alloc,
-			runtime.MemStats.TotalAlloc,
-			runtime.MemStats.HeapAlloc)
+		runtime.ReadMemStats(m)
+		log.Printf("  end alloc: %d total: %d heap: %d",
+			m.Alloc,
+			m.TotalAlloc,
+			m.HeapAlloc)
 
 	}
 }

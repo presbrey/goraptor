@@ -77,8 +77,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"io"
+	"log"
 	"os"
 	"sync"
 	"unsafe"
@@ -120,6 +120,7 @@ func (s *Syntax) String() string {
 
 // global map of parser name to parser description
 var ParserSyntax map[string]*Syntax
+
 // global map of serializer name to serializer description
 var SerializerSyntax map[string]*Syntax
 
