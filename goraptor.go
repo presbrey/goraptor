@@ -5,7 +5,7 @@ Written in 2011 by William Waites <ww@styx.org>.
 Distributed under the terms of the LGPL version 2.1 or
 any later version.
 
-To build you must have raptor version 2 or greater 
+To build you must have raptor version 2 or greater
 installed. You can get raptor from http://librdf.org/raptor/
 
 Example usage:
@@ -40,7 +40,7 @@ and write in another, preserving namespaces:
     fmt.Print(str)
 
 The step of setting the namespace handler is strictly unnecessary
-and is basically used so that the output is more aesthetically 
+and is basically used so that the output is more aesthetically
 pleasing. If instead of serializing to a string you want to serialize
 to a file, you can do instead:
 
@@ -49,7 +49,7 @@ to a file, you can do instead:
     serializer.AddN(statements)
 
 Note that it is strictly necessary to free the serializer for only then
-can it be guaranteed that any buffered output is written to the 
+can it be guaranteed that any buffered output is written to the
 destination file.
 
 The basic datatype is the Term which represents an RDF URI,
