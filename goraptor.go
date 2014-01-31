@@ -708,6 +708,7 @@ func NewParser(name string) *Parser {
 	cname := C.CString(name)
 	world := C.raptor_new_world_internal(C.RAPTOR_VERSION)
 	rparser := C.raptor_new_parser(world, cname)
+	C.raptor_parser_set_option(rparser, C.RAPTOR_OPTION_LOAD_EXTERNAL_ENTITIES, nil, 0)
 	parser := &Parser{world: world, parser: rparser}
 	C.free(unsafe.Pointer(cname))
 	C.go_raptor_parser_set_statement_handler(rparser, unsafe.Pointer(parser))
@@ -873,6 +874,7 @@ func NewSerializer(name string) *Serializer {
 	cname := C.CString(name)
 	world := C.raptor_new_world_internal(C.RAPTOR_VERSION)
 	rserializer := C.raptor_new_serializer(world, cname)
+	C.raptor_serializer_set_option(rserializer, C.RAPTOR_OPTION_WRITE_BASE_URI, nil, 0)
 	serializer := &Serializer{world: world, serializer: rserializer}
 	C.free(unsafe.Pointer(cname))
 	serializer.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
