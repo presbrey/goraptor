@@ -80,6 +80,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime"
 	"sync"
 	"unsafe"
 )
@@ -715,6 +716,11 @@ func NewParser(name string) *Parser {
 	C.go_raptor_parser_set_namespace_handler(rparser, unsafe.Pointer(parser))
 	parser.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
 	parser.SetNamespaceHandler(func(prefix, uri string) {})
+	runtime.SetFinalizer(parser, func(p *Parser) {
+		if p != nil {
+			p.Free()
+		}
+	})
 	return parser
 }
 
@@ -878,6 +884,11 @@ func NewSerializer(name string) *Serializer {
 	serializer := &Serializer{world: world, serializer: rserializer}
 	C.free(unsafe.Pointer(cname))
 	serializer.SetLogHandler(func(level int, text string) { log.Printf("[%s] %s", LogLevels[level], text) })
+	runtime.SetFinalizer(serializer, func(s *Serializer) {
+		if s != nil {
+			s.Free()
+		}
+	})
 	return serializer
 }
 
