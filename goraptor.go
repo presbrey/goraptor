@@ -693,8 +693,9 @@ var LogLevels map[int]string
 func GoRaptor_handle_log(user_data, msgp unsafe.Pointer) {
 	message := (*C.raptor_log_message)(msgp)
 	text := C.GoString(message.text)
-	handler := (*LogHandler)(user_data)
-	(*handler)(int(message.level), text)
+	log.Println(text)
+	// handler := (*LogHandler)(user_data)
+	// (*handler)(int(message.level), text)
 }
 
 type Parser struct {
